@@ -13,6 +13,7 @@ password: DB_PASS,
 database: DB_NAME,
 },
 pool: { min: 0, max: 10 },
+migrations: { directory: './migrations', },
 seeds: {
 directory: './seeds',
 },
