@@ -1,11 +1,16 @@
 const express = require('express');
-
 const authRouter = require('./routes/auth.router');
-
 const app = express();
+
+
+const taskListsRouter = require('./routes/taskLists.router');
+const tasksRouter = require('./routes/tasks.router');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/auth', authRouter);
+app.use('/api/lists', taskListsRouter);
+app.use('/api/tasks', tasksRouter);
 
 app.get('/', (req, res) => {
     res.json({
