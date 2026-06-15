@@ -1,34 +1,117 @@
-// Hàm lấy danh sách tất cả Task Lists
-function getLists(req, res) {
-    return res.json({
-        success: true,
-        message: 'Get lists successfully',
-        user: req.user,
-    });
+const jsend = require('../jsend');
+const taskListsService = require('../services/taskLists.service');
+
+async function getLists(req, res, next) {
+    try {
+        const taskLists = await taskListsService.findByUser(
+            req.user.user_id
+        );
+
+        return res.status(200).json(
+            jsend.success({
+                message: 'Get task lists successfully',
+                data: taskLists,
+            })
+        );
+    } catch (error) {
+        return next(error);
+    }
 }
 
-
-// Hàm lấy thông tin 1 Task List
 async function getList(req, res, next) {
-    return res.status(200).json({ message: "getList working!" });
+    try {
+        const taskList = await taskListsService.findById(
+            req.user.user_id,
+            req.params.id
+        );
+
+        if (!taskList) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task list not found',
+            });
+        }
+
+        return res.status(200).json(
+            jsend.success({
+                message: 'Get task list successfully',
+                data: taskList,
+            })
+        );
+    } catch (error) {
+        return next(error);
+    }
 }
 
-// Hàm tạo mới Task List
 async function createList(req, res, next) {
-    return res.status(201).json({ message: "createList working!" });
+    try {
+        const taskList = await taskListsService.create(
+            req.user.user_id,
+            req.body
+        );
+
+        return res.status(201).json(
+            jsend.success({
+                message: 'Task list created successfully',
+                data: taskList,
+            })
+        );
+    } catch (error) {
+        return next(error);
+    }
 }
 
-// Hàm cập nhật Task List
 async function updateList(req, res, next) {
-    return res.status(200).json({ message: "updateList working!" });
+    try {
+        const taskList = await taskListsService.update(
+            req.user.user_id,
+            req.params.id,
+            req.body
+        );
+
+        if (!taskList) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task list not found',
+            });
+        }
+
+        return res.status(200).json(
+            jsend.success({
+                message: 'Task list updated successfully',
+                data: taskList,
+            })
+        );
+    } catch (error) {
+        return next(error);
+    }
 }
 
-// Hàm xóa Task List
 async function deleteList(req, res, next) {
-    return res.status(200).json({ message: "deleteList working!" });
+    try {
+        const taskList = await taskListsService.remove(
+            req.user.user_id,
+            req.params.id
+        );
+
+        if (!taskList) {
+            return res.status(404).json({
+                success: false,
+                message: 'Task list not found',
+            });
+        }
+
+        return res.status(200).json(
+            jsend.success({
+                message: 'Task list deleted successfully',
+                data: taskList,
+            })
+        );
+    } catch (error) {
+        return next(error);
+    }
 }
 
-// Xuất các hàm ra với tên chuẩn khớp với file Router
 module.exports = {
     getLists,
     getList,
