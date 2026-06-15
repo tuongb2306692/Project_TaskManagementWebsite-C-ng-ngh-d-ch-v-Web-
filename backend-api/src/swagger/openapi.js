@@ -3,18 +3,21 @@ const swaggerJSDoc = require('swagger-jsdoc');
 const options = {
     definition: {
         openapi: '3.0.0',
+
         info: {
             title: 'TaskFlow API',
             version: '1.0.0',
             description:
                 'REST API documentation for TaskFlow Personal Task Management System',
         },
+
         servers: [
             {
                 url: 'http://localhost:3000',
                 description: 'Local development server',
             },
         ],
+
         tags: [
             {
                 name: 'Authentication',
@@ -29,12 +32,42 @@ const options = {
                 description: 'CRUD and filter APIs for tasks',
             },
         ],
+
         components: {
             securitySchemes: {
                 bearerAuth: {
                     type: 'http',
                     scheme: 'bearer',
                     bearerFormat: 'JWT',
+                },
+            },
+
+            headers: {
+                CacheControl: {
+                    description:
+                        'Caching policy for this response. The API uses private caching because task data belongs to the authenticated user.',
+                    schema: {
+                        type: 'string',
+                        example: 'private, max-age=60, must-revalidate',
+                    },
+                },
+
+                ETag: {
+                    description:
+                        'Entity tag generated from the JSON response body. The client can send this value back through If-None-Match.',
+                    schema: {
+                        type: 'string',
+                        example: '"9b74c9897bac770ffc029102a200c5de"',
+                    },
+                },
+
+                VaryAuthorization: {
+                    description:
+                        'Indicates that cached responses vary by Authorization header.',
+                    schema: {
+                        type: 'string',
+                        example: 'Authorization',
+                    },
                 },
             },
 
@@ -48,7 +81,7 @@ const options = {
                         },
                         message: {
                             type: 'string',
-                            example: 'Validation failed',
+                            example: 'Internal Server Error',
                         },
                     },
                 },
@@ -129,6 +162,23 @@ const options = {
                             type: 'string',
                             format: 'date-time',
                             example: '2026-06-15T10:00:00.000Z',
+                        },
+                    },
+                },
+
+                RegisterResponse: {
+                    type: 'object',
+                    properties: {
+                        success: {
+                            type: 'boolean',
+                            example: true,
+                        },
+                        message: {
+                            type: 'string',
+                            example: 'Register successfully',
+                        },
+                        data: {
+                            $ref: '#/components/schemas/User',
                         },
                     },
                 },
@@ -376,9 +426,26 @@ const options = {
                     responses: {
                         201: {
                             description: 'Register successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/RegisterResponse',
+                                    },
+                                },
+                            },
                         },
                         400: {
                             description: 'Validation failed or username exists',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        429: {
+                            description: 'Too many requests',
                             content: {
                                 'application/json': {
                                     schema: {
@@ -426,6 +493,16 @@ const options = {
                                 },
                             },
                         },
+                        429: {
+                            description: 'Too many requests',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ErrorResponse',
+                                    },
+                                },
+                            },
+                        },
                     },
                 },
             },
@@ -434,14 +511,41 @@ const options = {
                 get: {
                     tags: ['Task Lists'],
                     summary: 'Get all task lists of current user',
+                    description:
+                        'Returns all task lists of the authenticated user. This endpoint supports HTTP caching using Cache-Control, ETag and If-None-Match. If the client sends a matching If-None-Match value, the server returns 304 Not Modified.',
                     security: [
                         {
                             bearerAuth: [],
                         },
                     ],
+                    parameters: [
+                        {
+                            name: 'If-None-Match',
+                            in: 'header',
+                            required: false,
+                            description:
+                                'ETag value received from a previous successful response. If it matches the current response ETag, the server returns 304 Not Modified.',
+                            schema: {
+                                type: 'string',
+                                example:
+                                    '"9b74c9897bac770ffc029102a200c5de"',
+                            },
+                        },
+                    ],
                     responses: {
                         200: {
                             description: 'Get task lists successfully',
+                            headers: {
+                                'Cache-Control': {
+                                    $ref: '#/components/headers/CacheControl',
+                                },
+                                ETag: {
+                                    $ref: '#/components/headers/ETag',
+                                },
+                                Vary: {
+                                    $ref: '#/components/headers/VaryAuthorization',
+                                },
+                            },
                             content: {
                                 'application/json': {
                                     schema: {
@@ -467,8 +571,40 @@ const options = {
                                 },
                             },
                         },
+                        304: {
+                            description:
+                                'Not Modified. The cached task lists response is still valid, so the server does not return a response body.',
+                            headers: {
+                                'Cache-Control': {
+                                    $ref: '#/components/headers/CacheControl',
+                                },
+                                ETag: {
+                                    $ref: '#/components/headers/ETag',
+                                },
+                                Vary: {
+                                    $ref: '#/components/headers/VaryAuthorization',
+                                },
+                            },
+                        },
                         401: {
                             description: 'Unauthorized',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        429: {
+                            description: 'Too many requests',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ErrorResponse',
+                                    },
+                                },
+                            },
                         },
                     },
                 },
@@ -494,6 +630,27 @@ const options = {
                     responses: {
                         201: {
                             description: 'Task list created successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Task list created successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/TaskList',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
                         },
                         400: {
                             description: 'Validation failed',
@@ -507,6 +664,16 @@ const options = {
                         },
                         401: {
                             description: 'Unauthorized',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        429: {
+                            description: 'Too many requests',
                         },
                     },
                 },
@@ -535,9 +702,50 @@ const options = {
                     responses: {
                         200: {
                             description: 'Get task list successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Get task list successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/TaskList',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        400: {
+                            description: 'Validation failed',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ValidationErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task list not found',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ErrorResponse',
+                                    },
+                                },
+                            },
                         },
                     },
                 },
@@ -574,6 +782,40 @@ const options = {
                     responses: {
                         200: {
                             description: 'Task list updated successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Task list updated successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/TaskList',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        400: {
+                            description: 'Validation failed',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ValidationErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task list not found',
@@ -603,6 +845,33 @@ const options = {
                     responses: {
                         200: {
                             description: 'Task list deleted successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Task list deleted successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/TaskList',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        400: {
+                            description: 'Validation failed',
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task list not found',
@@ -615,6 +884,8 @@ const options = {
                 get: {
                     tags: ['Tasks'],
                     summary: 'Get tasks with optional filters',
+                    description:
+                        'Returns tasks of the authenticated user. This endpoint supports filtering and HTTP caching using Cache-Control, ETag and If-None-Match. If the client sends a matching If-None-Match value, the server returns 304 Not Modified.',
                     security: [
                         {
                             bearerAuth: [],
@@ -645,6 +916,8 @@ const options = {
                             name: 'tl_id',
                             in: 'query',
                             required: false,
+                            description:
+                                'Filter tasks by task list ID. This project database uses tl_id as the foreign key.',
                             schema: {
                                 type: 'integer',
                             },
@@ -660,10 +933,33 @@ const options = {
                             },
                             example: 'true',
                         },
+                        {
+                            name: 'If-None-Match',
+                            in: 'header',
+                            required: false,
+                            description:
+                                'ETag value received from a previous successful response. If it matches the current response ETag, the server returns 304 Not Modified.',
+                            schema: {
+                                type: 'string',
+                                example:
+                                    '"9b74c9897bac770ffc029102a200c5de"',
+                            },
+                        },
                     ],
                     responses: {
                         200: {
                             description: 'Get tasks successfully',
+                            headers: {
+                                'Cache-Control': {
+                                    $ref: '#/components/headers/CacheControl',
+                                },
+                                ETag: {
+                                    $ref: '#/components/headers/ETag',
+                                },
+                                Vary: {
+                                    $ref: '#/components/headers/VaryAuthorization',
+                                },
+                            },
                             content: {
                                 'application/json': {
                                     schema: {
@@ -689,6 +985,37 @@ const options = {
                                 },
                             },
                         },
+                        304: {
+                            description:
+                                'Not Modified. The cached tasks response is still valid, so the server does not return a response body.',
+                            headers: {
+                                'Cache-Control': {
+                                    $ref: '#/components/headers/CacheControl',
+                                },
+                                ETag: {
+                                    $ref: '#/components/headers/ETag',
+                                },
+                                Vary: {
+                                    $ref: '#/components/headers/VaryAuthorization',
+                                },
+                            },
+                        },
+                        400: {
+                            description: 'Validation failed',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ValidationErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        401: {
+                            description: 'Unauthorized',
+                        },
+                        429: {
+                            description: 'Too many requests',
+                        },
                     },
                 },
 
@@ -713,12 +1040,46 @@ const options = {
                     responses: {
                         201: {
                             description: 'Task created successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Task created successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/Task',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
                         },
                         400: {
                             description: 'Validation failed',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ValidationErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task list not found',
+                        },
+                        429: {
+                            description: 'Too many requests',
                         },
                     },
                 },
@@ -747,6 +1108,33 @@ const options = {
                     responses: {
                         200: {
                             description: 'Get task successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Get task successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/Task',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        400: {
+                            description: 'Validation failed',
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task not found',
@@ -786,9 +1174,40 @@ const options = {
                     responses: {
                         200: {
                             description: 'Task updated successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Task updated successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/Task',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
                         },
                         400: {
                             description: 'Validation failed',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        $ref: '#/components/schemas/ValidationErrorResponse',
+                                    },
+                                },
+                            },
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task not found',
@@ -818,6 +1237,33 @@ const options = {
                     responses: {
                         200: {
                             description: 'Task deleted successfully',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            success: {
+                                                type: 'boolean',
+                                                example: true,
+                                            },
+                                            message: {
+                                                type: 'string',
+                                                example:
+                                                    'Task deleted successfully',
+                                            },
+                                            data: {
+                                                $ref: '#/components/schemas/Task',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        400: {
+                            description: 'Validation failed',
+                        },
+                        401: {
+                            description: 'Unauthorized',
                         },
                         404: {
                             description: 'Task not found',
@@ -827,6 +1273,7 @@ const options = {
             },
         },
     },
+
     apis: [],
 };
 
