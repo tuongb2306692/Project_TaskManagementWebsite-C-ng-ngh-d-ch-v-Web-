@@ -1,4 +1,6 @@
 const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+
 
 const authRouter = require('./routes/auth.router');
 const taskListsRouter = require('./routes/taskLists.router');
@@ -6,6 +8,7 @@ const tasksRouter = require('./routes/tasks.router');
 
 const apiLimiter = require('./middlewares/rate-limit.middleware');
 
+const openApiSpec = require('./swagger/openapi');
 const app = express();
 
 app.use(express.json());
@@ -18,6 +21,7 @@ app.get('/', (req, res) => {
     });
 });
 
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.use('/api', apiLimiter);
 
