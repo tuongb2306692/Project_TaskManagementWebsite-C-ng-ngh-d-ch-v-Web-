@@ -1,6 +1,6 @@
 const jsend = require('../jsend');
 const tasksService = require('../services/tasks.service');
-
+const { sendCachedJson } = require('../utils/http-cache');
 async function getTasks(req, res, next) {
     try {
         const tasks = await tasksService.find(
@@ -8,12 +8,12 @@ async function getTasks(req, res, next) {
             req.query
         );
 
-        return res.status(200).json(
-            jsend.success({
-                message: 'Get tasks successfully',
-                data: tasks,
-            })
-        );
+        const responseBody = jsend.success({
+            message: 'Get tasks successfully',
+            data: tasks,
+        });
+
+        return sendCachedJson(req, res, 200, responseBody);
     } catch (error) {
         return next(error);
     }

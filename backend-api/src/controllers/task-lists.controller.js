@@ -1,18 +1,18 @@
 const jsend = require('../jsend');
 const taskListsService = require('../services/taskLists.service');
-
+const { sendCachedJson } = require('../utils/http-cache');
 async function getLists(req, res, next) {
     try {
         const taskLists = await taskListsService.findByUser(
             req.user.user_id
         );
 
-        return res.status(200).json(
-            jsend.success({
-                message: 'Get task lists successfully',
-                data: taskLists,
-            })
-        );
+        const responseBody = jsend.success({
+            message: 'Get task lists successfully',
+            data: taskLists,
+        });
+
+        return sendCachedJson(req, res, 200, responseBody);
     } catch (error) {
         return next(error);
     }
