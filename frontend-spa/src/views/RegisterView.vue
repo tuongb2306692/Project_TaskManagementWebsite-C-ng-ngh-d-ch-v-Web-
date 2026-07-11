@@ -7,10 +7,22 @@
           <div class="card-body">
 
             <h2 class="text-center mb-4">
-              Personal Task Management
+              Create Account
             </h2>
 
             <form>
+
+              <div class="mb-3">
+                <label class="form-label">
+                  Username
+                </label>
+
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="Enter username"
+                />
+              </div>
 
               <div class="mb-3">
                 <label class="form-label">
@@ -20,7 +32,7 @@
                 <input
                   type="email"
                   class="form-control"
-                  placeholder="Enter your email"
+                  placeholder="Enter email"
                 />
               </div>
 
@@ -32,23 +44,35 @@
                 <input
                   type="password"
                   class="form-control"
-                  placeholder="Enter your password"
+                  placeholder="Enter password"
+                />
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">
+                  Confirm Password
+                </label>
+
+                <input
+                  type="password"
+                  class="form-control"
+                  placeholder="Confirm password"
                 />
               </div>
 
               <button
                 type="submit"
-                class="btn btn-primary w-100 mb-3"
+                class="btn btn-success w-100 mb-3"
               >
-                Login
+                Register
               </button>
 
             </form>
 
             <p class="text-center mb-0">
-              Don't have an account?
-              <RouterLink to="/register">
-                Register
+              Already have an account?
+              <RouterLink to="/login">
+                Login
               </RouterLink>
             </p>
 
