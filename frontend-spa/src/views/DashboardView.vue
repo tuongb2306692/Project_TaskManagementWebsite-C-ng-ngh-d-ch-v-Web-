@@ -1,26 +1,24 @@
 <script setup>
-import LogoutButton from "@/components/LogoutButton.vue";
-
 const user = JSON.parse(localStorage.getItem("user"));
 </script>
 
 <template>
-  <div class="container mt-5">
+  <div class="card shadow">
 
-    <div class="card shadow">
+    <div class="card-body">
 
-      <div class="card-body text-center">
+      <h2>Dashboard</h2>
 
-        <h2>Dashboard</h2>
+      <hr>
 
-        <p class="mt-3">
-          Welcome,
-          <strong>{{ user.user_username }}</strong>
-        </p>
+      <h5>
+        Welcome,
+        <strong>{{ user.user_username }}</strong>
+      </h5>
 
-        <LogoutButton />
-
-      </div>
+      <p class="mt-3">
+        This is your personal task management dashboard.
+      </p>
 
     </div>
 
