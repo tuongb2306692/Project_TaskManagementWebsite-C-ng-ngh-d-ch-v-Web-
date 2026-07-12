@@ -2,7 +2,12 @@ import api from "./api.service";
 
 class ListService {
   async getAll() {
-    const response = await api.get("/lists");
+    const response = await api.get("/lists", {
+      params: {
+        _: Date.now(),
+      },
+    });
+
     return response.data;
   }
 
