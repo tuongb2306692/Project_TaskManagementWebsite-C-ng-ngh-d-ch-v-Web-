@@ -1,12 +1,18 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import {
+  ref,
+  onMounted,
+  onUnmounted,
+} from "vue";
+
 import * as bootstrap from "bootstrap";
 
 import ListService from "@/services/list.service";
-
 import { useTaskStore } from "@/stores/task.store";
 
 const taskStore = useTaskStore();
+
+let polling = null;
 
 const taskLists = ref([]);
 
@@ -76,12 +82,15 @@ const createTask = async () => {
 
   try {
     await taskStore.createTask(newTask.value);
+
     createTaskModal.hide();
+
     document.body.classList.remove("modal-open");
 
-document
-  .querySelectorAll(".modal-backdrop")
-  .forEach((el) => el.remove());
+    document
+      .querySelectorAll(".modal-backdrop")
+      .forEach((el) => el.remove());
+
     newTask.value = {
       tl_id: "",
       task_title: "",
@@ -113,12 +122,9 @@ const openEditModal = (task) => {
       : "",
   };
 
-  const modal = new bootstrap.Modal(
-    document.getElementById("editTaskModal")
-  );
-
-  modal.show();
+  editTaskModal.show();
 };
+
 const updateTask = async () => {
   if (!editTask.value.task_title.trim()) {
     alert("Please enter task title.");
@@ -133,14 +139,24 @@ const updateTask = async () => {
       {
         tl_id: editTask.value.tl_id,
         task_title: editTask.value.task_title,
-        task_description: editTask.value.task_description,
-        task_priority: editTask.value.task_priority,
-        task_status: editTask.value.task_status,
-        task_due_date: editTask.value.task_due_date,
+        task_description:
+          editTask.value.task_description,
+        task_priority:
+          editTask.value.task_priority,
+        task_status:
+          editTask.value.task_status,
+        task_due_date:
+          editTask.value.task_due_date,
       }
     );
 
     editTaskModal.hide();
+
+    document.body.classList.remove("modal-open");
+
+    document
+      .querySelectorAll(".modal-backdrop")
+      .forEach((el) => el.remove());
   } catch (error) {
     alert(
       error.response?.data?.message ||
@@ -171,9 +187,9 @@ const deleteTask = async (id) => {
 };
 
 onMounted(async () => {
-  await loadTaskLists();
-
   await taskStore.loadTasks();
+
+  await loadTaskLists();
 
   createTaskModal = new bootstrap.Modal(
     document.getElementById("createTaskModal")
@@ -182,11 +198,21 @@ onMounted(async () => {
   editTaskModal = new bootstrap.Modal(
     document.getElementById("editTaskModal")
   );
+
+  polling = setInterval(async () => {
+    if (!document.hidden) {
+      await taskStore.loadTasks();
+    }
+  }, 5000);
 });
 
-
-
+onUnmounted(() => {
+  if (polling) {
+    clearInterval(polling);
+  }
+});
 </script>
+
 <template>
   <div class="card shadow">
 

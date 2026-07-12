@@ -29,5 +29,16 @@ import { RouterLink } from "vue-router";
       Tasks
     </RouterLink>
 
+    <li class="list-group-item">
+  <RouterLink
+    to="/profile"
+    class="text-decoration-none text-dark d-block"
+  >
+    <i class="fas fa-user me-3"></i>
+
+    Profile
+  </RouterLink>
+</li>
+
   </div>
 </template>

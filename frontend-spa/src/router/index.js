@@ -53,6 +53,11 @@ const routes = [
         name: "tasks",
         component: () => import("@/views/TasksView.vue"),
       },
+      {
+        path: "profile",
+        name: "profile",
+        component: () => import("@/views/ProfileView.vue"),
+      },
     ],
   },
 
