@@ -41,11 +41,17 @@ const routes = [
         name: "dashboard",
         component: DashboardView,
       },
-      
+
       {
         path: "lists",
         name: "lists",
         component: () => import("@/views/TaskListsView.vue"),
+      },
+
+      {
+        path: "tasks",
+        name: "tasks",
+        component: () => import("@/views/TasksView.vue"),
       },
     ],
   },
