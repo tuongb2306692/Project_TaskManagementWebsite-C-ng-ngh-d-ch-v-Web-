@@ -1,11 +1,11 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import * as bootstrap from "bootstrap";
-import ListService from "@/services/list.service";
+import { useListStore } from "@/stores/list.store";
 
-const taskLists = ref([]);
-const loading = ref(true);
-const errorMessage = ref("");
+
+const listStore = useListStore();
+
 
 const newList = ref({
   tl_name: "",
@@ -20,43 +20,37 @@ const editList = ref({
 
 const creating = ref(false);
 const editing = ref(false);
+let createListModal = null;
+let editListModal = null;
 
 const loadTaskLists = async () => {
-  loading.value = true;
-  errorMessage.value = "";
-
-  try {
-    const response = await ListService.getAll();
-    taskLists.value = response.data;
-  } catch (error) {
-    errorMessage.value =
-      error.response?.data?.message || "Cannot load task lists.";
-  } finally {
-    loading.value = false;
-  }
+  await listStore.loadTaskLists();
 };
 
 const createTaskList = async () => {
   creating.value = true;
 
   try {
-    await ListService.create(newList.value);
+    await listStore.createTaskList(newList.value);
 
-    const modalElement = document.getElementById("createListModal");
-    const modal = bootstrap.Modal.getInstance(modalElement);
 
-    if (modal) {
-      modal.hide();
-    }
+    createListModal.hide();
+
+    document.body.classList.remove("modal-open");
+
+    document
+      .querySelectorAll(".modal-backdrop")
+      .forEach((el) => el.remove());
 
     newList.value = {
       tl_name: "",
       tl_description: "",
     };
-
-    await loadTaskLists();
   } catch (error) {
-    alert(error.response?.data?.message || "Cannot create task list.");
+    alert(
+      error.response?.data?.message ||
+      "Cannot create task list."
+    );
   } finally {
     creating.value = false;
   }
@@ -69,32 +63,35 @@ const openEditModal = (list) => {
     tl_description: list.tl_description,
   };
 
-  const modal = new bootstrap.Modal(
-    document.getElementById("editListModal")
-  );
-
-  modal.show();
+  editListModal.show();
 };
 
 const updateTaskList = async () => {
   editing.value = true;
 
   try {
-    await ListService.update(editList.value.tl_id, {
-      tl_name: editList.value.tl_name,
-      tl_description: editList.value.tl_description,
-    });
+    await listStore.updateTaskList(
+        editList.value.tl_id,
+        {
+        tl_name: editList.value.tl_name,
+        tl_description: editList.value.tl_description,
+      }
+      );
 
-    const modalElement = document.getElementById("editListModal");
-    const modal = bootstrap.Modal.getInstance(modalElement);
+    
+    editListModal.hide();
 
-    if (modal) {
-      modal.hide();
-    }
+    document.body.classList.remove("modal-open");
 
-    await loadTaskLists();
+    document
+      .querySelectorAll(".modal-backdrop")
+      .forEach((el) => el.remove());
+
   } catch (error) {
-    alert(error.response?.data?.message || "Cannot update task list.");
+    alert(
+      error.response?.data?.message ||
+      "Cannot update task list."
+    );
   } finally {
     editing.value = false;
   }
@@ -110,9 +107,8 @@ const deleteTaskList = async (id) => {
   }
 
   try {
-    await ListService.delete(id);
+    await listStore.deleteTaskList(id);
 
-    await loadTaskLists();
   } catch (error) {
     alert(
       error.response?.data?.message ||
@@ -122,9 +118,18 @@ const deleteTaskList = async (id) => {
 };
 
 
-onMounted(() => {
-  loadTaskLists();
+onMounted(async () => {
+    await loadTaskLists();
+
+    createListModal = new bootstrap.Modal(
+        document.getElementById("createListModal")
+    );
+
+    editListModal = new bootstrap.Modal(
+        document.getElementById("editListModal")
+    );
 });
+
 </script>
 
 <template>
@@ -146,21 +151,21 @@ onMounted(() => {
       <hr />
 
       <div
-        v-if="loading"
+        v-if="listStore.loading"
         class="text-center"
       >
         Loading...
       </div>
 
       <div
-        v-else-if="errorMessage"
+        v-else-if="listStore.errorMessage"
         class="alert alert-danger"
       >
-        {{ errorMessage }}
+        {{ listStore.errorMessage}}
       </div>
 
       <div
-        v-else-if="taskLists.length === 0"
+        v-else-if="listStore.taskLists.length === 0"
         class="text-muted"
       >
         No task lists found.
@@ -183,7 +188,7 @@ onMounted(() => {
 
         <tbody>
           <tr
-            v-for="list in taskLists"
+            v-for="list in listStore.taskLists"
             :key="list.tl_id"
           >
             <td>{{ list.tl_id }}</td>

@@ -2,17 +2,13 @@
 import { ref, onMounted } from "vue";
 import * as bootstrap from "bootstrap";
 
-import TaskService from "@/services/task.service";
 import ListService from "@/services/list.service";
 
-const tasks = ref([]);
+import { useTaskStore } from "@/stores/task.store";
+
+const taskStore = useTaskStore();
+
 const taskLists = ref([]);
-
-const loading = ref(true);
-const errorMessage = ref("");
-
-const creating = ref(false);
-const editing = ref(false);
 
 const newTask = ref({
   tl_id: "",
@@ -33,26 +29,26 @@ const editTask = ref({
   task_due_date: "",
 });
 
+const creating = ref(false);
+const editing = ref(false);
+
+let createTaskModal = null;
+let editTaskModal = null;
+
 const formatDate = (date) => {
-  if (!date) return "";
+  if (!date) {
+    return "";
+  }
 
   return new Date(date).toLocaleDateString("en-GB");
 };
 
-const loadTasks = async () => {
-  loading.value = true;
-  errorMessage.value = "";
+const getTaskListName = (tl_id) => {
+  const list = taskLists.value.find(
+    (item) => item.tl_id === tl_id
+  );
 
-  try {
-    const response = await TaskService.getAll();
-
-    tasks.value = response.data;
-  } catch (error) {
-    errorMessage.value =
-      error.response?.data?.message || "Cannot load tasks.";
-  } finally {
-    loading.value = false;
-  }
+  return list ? list.tl_name : "";
 };
 
 const loadTaskLists = async () => {
@@ -61,26 +57,31 @@ const loadTaskLists = async () => {
 
     taskLists.value = response.data;
   } catch (error) {
-    console.log(error);
+    console.error(error);
   }
 };
 
 const createTask = async () => {
+  if (!newTask.value.tl_id) {
+    alert("Please select a task list.");
+    return;
+  }
+
+  if (!newTask.value.task_title.trim()) {
+    alert("Please enter task title.");
+    return;
+  }
+
   creating.value = true;
 
   try {
-    await TaskService.create(newTask.value);
+    await taskStore.createTask(newTask.value);
+    createTaskModal.hide();
+    document.body.classList.remove("modal-open");
 
-    const modalElement =
-      document.getElementById("createTaskModal");
-
-    const modal =
-      bootstrap.Modal.getInstance(modalElement);
-
-    if (modal) {
-      modal.hide();
-    }
-
+document
+  .querySelectorAll(".modal-backdrop")
+  .forEach((el) => el.remove());
     newTask.value = {
       tl_id: "",
       task_title: "",
@@ -89,8 +90,6 @@ const createTask = async () => {
       task_status: "Todo",
       task_due_date: "",
     };
-
-    await loadTasks();
   } catch (error) {
     alert(
       error.response?.data?.message ||
@@ -121,29 +120,27 @@ const openEditModal = (task) => {
   modal.show();
 };
 const updateTask = async () => {
+  if (!editTask.value.task_title.trim()) {
+    alert("Please enter task title.");
+    return;
+  }
+
   editing.value = true;
 
   try {
-    await TaskService.update(editTask.value.task_id, {
-      tl_id: editTask.value.tl_id,
-      task_title: editTask.value.task_title,
-      task_description: editTask.value.task_description,
-      task_priority: editTask.value.task_priority,
-      task_status: editTask.value.task_status,
-      task_due_date: editTask.value.task_due_date,
-    });
+    await taskStore.updateTask(
+      editTask.value.task_id,
+      {
+        tl_id: editTask.value.tl_id,
+        task_title: editTask.value.task_title,
+        task_description: editTask.value.task_description,
+        task_priority: editTask.value.task_priority,
+        task_status: editTask.value.task_status,
+        task_due_date: editTask.value.task_due_date,
+      }
+    );
 
-    const modalElement =
-      document.getElementById("editTaskModal");
-
-    const modal =
-      bootstrap.Modal.getInstance(modalElement);
-
-    if (modal) {
-      modal.hide();
-    }
-
-    await loadTasks();
+    editTaskModal.hide();
   } catch (error) {
     alert(
       error.response?.data?.message ||
@@ -164,9 +161,7 @@ const deleteTask = async (id) => {
   }
 
   try {
-    await TaskService.delete(id);
-
-    await loadTasks();
+    await taskStore.deleteTask(id);
   } catch (error) {
     alert(
       error.response?.data?.message ||
@@ -177,8 +172,20 @@ const deleteTask = async (id) => {
 
 onMounted(async () => {
   await loadTaskLists();
-  await loadTasks();
+
+  await taskStore.loadTasks();
+
+  createTaskModal = new bootstrap.Modal(
+    document.getElementById("createTaskModal")
+  );
+
+  editTaskModal = new bootstrap.Modal(
+    document.getElementById("editTaskModal")
+  );
 });
+
+
+
 </script>
 <template>
   <div class="card shadow">
@@ -200,24 +207,24 @@ onMounted(async () => {
 
       </div>
 
-      <hr />
+      <hr>
 
       <div
-        v-if="loading"
+        v-if="taskStore.loading"
         class="text-center"
       >
         Loading...
       </div>
 
       <div
-        v-else-if="errorMessage"
+        v-else-if="taskStore.errorMessage"
         class="alert alert-danger"
       >
-        {{ errorMessage }}
+        {{ taskStore.errorMessage }}
       </div>
 
       <div
-        v-else-if="tasks.length === 0"
+        v-else-if="taskStore.tasks.length === 0"
         class="text-muted"
       >
         No tasks found.
@@ -232,19 +239,34 @@ onMounted(async () => {
 
           <tr>
 
-            <th width="70">ID</th>
+            <th width="70">
+              ID
+            </th>
 
-            <th>Title</th>
+            <th>
+              Title
+            </th>
 
-            <th>Status</th>
+            <th>
+              Status
+            </th>
 
-            <th>Priority</th>
+            <th>
+              Priority
+            </th>
 
-            <th>Due Date</th>
+            <th>
+              Due Date
+            </th>
 
-            <th width="90">List ID</th>
+            <th>
+              Task List
+            </th>
 
-            <th width="180" class="text-center">
+            <th
+              width="180"
+              class="text-center"
+            >
               Actions
             </th>
 
@@ -255,21 +277,33 @@ onMounted(async () => {
         <tbody>
 
           <tr
-            v-for="task in tasks"
+            v-for="task in taskStore.tasks"
             :key="task.task_id"
           >
 
-            <td>{{ task.task_id }}</td>
+            <td>
+              {{ task.task_id }}
+            </td>
 
-            <td>{{ task.task_title }}</td>
+            <td>
+              {{ task.task_title }}
+            </td>
 
-            <td>{{ task.task_status }}</td>
+            <td>
+              {{ task.task_status }}
+            </td>
 
-            <td>{{ task.task_priority }}</td>
+            <td>
+              {{ task.task_priority }}
+            </td>
 
-            <td>{{ formatDate(task.task_due_date) }}</td>
+            <td>
+              {{ formatDate(task.task_due_date) }}
+            </td>
 
-            <td>{{ task.tl_id }}</td>
+            <td>
+              {{ getTaskListName(task.tl_id) }}
+            </td>
 
             <td class="text-center">
 
@@ -300,252 +334,359 @@ onMounted(async () => {
     </div>
 
   </div>
+    <!-- Create Modal -->
 
-  <!-- Create Modal -->
-   <div
-  class="modal fade"
-  id="createTaskModal"
-  tabindex="-1"
-  aria-hidden="true"
->
-  <div class="modal-dialog">
-    <div class="modal-content">
+  <div
+    class="modal fade"
+    id="createTaskModal"
+    tabindex="-1"
+    aria-hidden="true"
+  >
 
-      <div class="modal-header">
+    <div class="modal-dialog">
 
-        <h5 class="modal-title">
-          Create Task
-        </h5>
+      <div class="modal-content">
 
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-        ></button>
+        <div class="modal-header">
 
-      </div>
+          <h5 class="modal-title">
+            Create Task
+          </h5>
 
-      <div class="modal-body">
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
 
-        <div class="mb-3">
-          <label class="form-label">Task List</label>
+        </div>
 
-          <select
-            class="form-select"
-            v-model="newTask.tl_id"
-          >
-            <option value="">Select Task List</option>
+        <div class="modal-body">
 
-            <option
-              v-for="list in taskLists"
-              :key="list.tl_id"
-              :value="list.tl_id"
+          <div class="mb-3">
+
+            <label class="form-label">
+              Task List
+            </label>
+
+            <select
+              class="form-select"
+              v-model="newTask.tl_id"
             >
-              {{ list.tl_name }}
-            </option>
 
-          </select>
+              <option value="">
+                Select Task List
+              </option>
+
+              <option
+                v-for="list in taskLists"
+                :key="list.tl_id"
+                :value="list.tl_id"
+              >
+                {{ list.tl_name }}
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Title
+            </label>
+
+            <input
+              type="text"
+              class="form-control"
+              v-model="newTask.task_title"
+            />
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Description
+            </label>
+
+            <textarea
+              rows="3"
+              class="form-control"
+              v-model="newTask.task_description"
+            ></textarea>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Priority
+            </label>
+
+            <select
+              class="form-select"
+              v-model="newTask.task_priority"
+            >
+
+              <option value="High">
+                High
+              </option>
+
+              <option value="Medium">
+                Medium
+              </option>
+
+              <option value="Low">
+                Low
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Status
+            </label>
+
+            <select
+              class="form-select"
+              v-model="newTask.task_status"
+            >
+
+              <option value="Todo">
+                Todo
+              </option>
+
+              <option value="Doing">
+                Doing
+              </option>
+
+              <option value="Done">
+                Done
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Due Date
+            </label>
+
+            <input
+              type="date"
+              class="form-control"
+              v-model="newTask.task_due_date"
+            />
+
+          </div>
+
         </div>
 
-        <div class="mb-3">
-          <label class="form-label">Title</label>
+        <div class="modal-footer">
 
-          <input
-            class="form-control"
-            v-model="newTask.task_title"
-          />
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Description</label>
-
-          <textarea
-            rows="3"
-            class="form-control"
-            v-model="newTask.task_description"
-          ></textarea>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Priority</label>
-
-          <select
-            class="form-select"
-            v-model="newTask.task_priority"
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
           >
-            <option>Low</option>
-            <option>Medium</option>
-            <option>High</option>
-          </select>
-        </div>
+            Cancel
+          </button>
 
-        <div class="mb-3">
-          <label class="form-label">Status</label>
-
-          <select
-            class="form-select"
-            v-model="newTask.task_status"
+          <button
+            class="btn btn-primary"
+            @click="createTask"
+            :disabled="creating"
           >
-            <option>Todo</option>
-            <option>Doing</option>
-            <option>Done</option>
-          </select>
+            {{ creating ? "Creating..." : "Create" }}
+          </button>
+
         </div>
-
-        <div class="mb-3">
-          <label class="form-label">Due Date</label>
-
-          <input
-            type="date"
-            class="form-control"
-            v-model="newTask.task_due_date"
-          />
-        </div>
-
-      </div>
-
-      <div class="modal-footer">
-
-        <button
-          class="btn btn-secondary"
-          data-bs-dismiss="modal"
-        >
-          Cancel
-        </button>
-
-        <button
-          class="btn btn-primary"
-          @click="createTask"
-          :disabled="creating"
-        >
-          {{ creating ? "Creating..." : "Create" }}
-        </button>
 
       </div>
 
     </div>
+
   </div>
-</div>
-<div
-  class="modal fade"
-  id="editTaskModal"
-  tabindex="-1"
-  aria-hidden="true"
->
-  <div class="modal-dialog">
-    <div class="modal-content">
+    <!-- Edit Modal -->
 
-      <div class="modal-header">
+  <div
+    class="modal fade"
+    id="editTaskModal"
+    tabindex="-1"
+    aria-hidden="true"
+  >
 
-        <h5 class="modal-title">
-          Edit Task
-        </h5>
+    <div class="modal-dialog">
 
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-        ></button>
+      <div class="modal-content">
 
-      </div>
+        <div class="modal-header">
 
-      <div class="modal-body">
+          <h5 class="modal-title">
+            Edit Task
+          </h5>
 
-        <div class="mb-3">
-          <label class="form-label">Task List</label>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
 
-          <select
-            class="form-select"
-            v-model="editTask.tl_id"
-          >
-            <option
-              v-for="list in taskLists"
-              :key="list.tl_id"
-              :value="list.tl_id"
+        </div>
+
+        <div class="modal-body">
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Task List
+            </label>
+
+            <select
+              class="form-select"
+              v-model="editTask.tl_id"
             >
-              {{ list.tl_name }}
-            </option>
-          </select>
+
+              <option
+                v-for="list in taskLists"
+                :key="list.tl_id"
+                :value="list.tl_id"
+              >
+                {{ list.tl_name }}
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Title
+            </label>
+
+            <input
+              type="text"
+              class="form-control"
+              v-model="editTask.task_title"
+            />
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Description
+            </label>
+
+            <textarea
+              rows="3"
+              class="form-control"
+              v-model="editTask.task_description"
+            ></textarea>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Priority
+            </label>
+
+            <select
+              class="form-select"
+              v-model="editTask.task_priority"
+            >
+
+              <option value="High">
+                High
+              </option>
+
+              <option value="Medium">
+                Medium
+              </option>
+
+              <option value="Low">
+                Low
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Status
+            </label>
+
+            <select
+              class="form-select"
+              v-model="editTask.task_status"
+            >
+
+              <option value="Todo">
+                Todo
+              </option>
+
+              <option value="Doing">
+                Doing
+              </option>
+
+              <option value="Done">
+                Done
+              </option>
+
+            </select>
+
+          </div>
+
+          <div class="mb-3">
+
+            <label class="form-label">
+              Due Date
+            </label>
+
+            <input
+              type="date"
+              class="form-control"
+              v-model="editTask.task_due_date"
+            />
+
+          </div>
+
         </div>
 
-        <div class="mb-3">
-          <label class="form-label">Title</label>
+        <div class="modal-footer">
 
-          <input
-            class="form-control"
-            v-model="editTask.task_title"
-          />
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Description</label>
-
-          <textarea
-            rows="3"
-            class="form-control"
-            v-model="editTask.task_description"
-          ></textarea>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Priority</label>
-
-          <select
-            class="form-select"
-            v-model="editTask.task_priority"
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
           >
-            <option>Low</option>
-            <option>Medium</option>
-            <option>High</option>
-          </select>
-        </div>
+            Cancel
+          </button>
 
-        <div class="mb-3">
-          <label class="form-label">Status</label>
-
-          <select
-            class="form-select"
-            v-model="editTask.task_status"
+          <button
+            class="btn btn-warning"
+            @click="updateTask"
+            :disabled="editing"
           >
-            <option>Todo</option>
-            <option>Doing</option>
-            <option>Done</option>
-          </select>
+            {{ editing ? "Updating..." : "Update" }}
+          </button>
+
         </div>
-
-        <div class="mb-3">
-          <label class="form-label">Due Date</label>
-
-          <input
-            type="date"
-            class="form-control"
-            v-model="editTask.task_due_date"
-          />
-        </div>
-
-      </div>
-
-      <div class="modal-footer">
-
-        <button
-          class="btn btn-secondary"
-          data-bs-dismiss="modal"
-        >
-          Cancel
-        </button>
-
-        <button
-          class="btn btn-warning"
-          @click="updateTask"
-          :disabled="editing"
-        >
-          {{ editing ? "Updating..." : "Update" }}
-        </button>
 
       </div>
 
     </div>
+
   </div>
-</div>
 
 </template>

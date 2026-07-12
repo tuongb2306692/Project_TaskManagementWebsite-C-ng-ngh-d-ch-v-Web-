@@ -1,13 +1,15 @@
 <script setup>
-import { RouterLink, useRouter } from "vue-router";
-import AuthService from "@/services/auth.service";
 import { ref, onMounted } from "vue";
+import { RouterLink, useRouter } from "vue-router";
+
+import AuthService from "@/services/auth.service";
+import { useUserStore } from "@/stores/user.store";
 
 const router = useRouter();
-onMounted(() => {
-  const token = localStorage.getItem("accessToken");
+const userStore = useUserStore();
 
-  if (token) {
+onMounted(() => {
+  if (userStore.isAuthenticated) {
     router.push("/dashboard");
   }
 });
@@ -39,14 +41,9 @@ const handleLogin = async () => {
       password: password.value,
     });
 
-    localStorage.setItem(
-      "accessToken",
+    userStore.setUser(
+      response.data.user,
       response.data.token
-    );
-
-    localStorage.setItem(
-      "user",
-      JSON.stringify(response.data.user)
     );
 
     alert(response.message);
@@ -95,7 +92,7 @@ const handleLogin = async () => {
                   type="text"
                   class="form-control"
                   placeholder="Enter username"
-                >
+                />
               </div>
 
               <div class="mb-3">
@@ -108,7 +105,7 @@ const handleLogin = async () => {
                   type="password"
                   class="form-control"
                   placeholder="Enter password"
-                >
+                />
               </div>
 
               <button
@@ -121,7 +118,7 @@ const handleLogin = async () => {
 
             </form>
 
-            <hr>
+            <hr />
 
             <p class="text-center mb-0">
               Don't have an account?
