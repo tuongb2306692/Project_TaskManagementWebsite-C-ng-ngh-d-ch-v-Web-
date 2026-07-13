@@ -1,6 +1,7 @@
 <script setup>
 import {
   ref,
+  computed,
   onMounted,
   onUnmounted,
 } from "vue";
@@ -15,6 +16,7 @@ const taskStore = useTaskStore();
 let polling = null;
 
 const taskLists = ref([]);
+const selectedTaskList = ref("");
 
 const newTask = ref({
   tl_id: "",
@@ -56,6 +58,17 @@ const getTaskListName = (tl_id) => {
 
   return list ? list.tl_name : "";
 };
+
+const filteredTasks = computed(() => {
+  if (!selectedTaskList.value) {
+    return taskStore.tasks;
+  }
+
+  return taskStore.tasks.filter(
+    (task) =>
+      task.tl_id == selectedTaskList.value
+  );
+});
 
 const loadTaskLists = async () => {
   try {
@@ -220,18 +233,41 @@ onUnmounted(() => {
 
       <div class="d-flex justify-content-between align-items-center mb-3">
 
-        <h2>Tasks</h2>
+  <h2>Tasks</h2>
 
-        <button
-          class="btn btn-primary"
-          data-bs-toggle="modal"
-          data-bs-target="#createTaskModal"
-        >
-          <i class="fas fa-plus me-2"></i>
-          New Task
-        </button>
+  <div class="d-flex align-items-center">
 
-      </div>
+    <select
+      v-model="selectedTaskList"
+      class="form-select me-3"
+      style="width:220px"
+    >
+      <option value="">
+        All Task Lists
+      </option>
+
+      <option
+        v-for="list in taskLists"
+        :key="list.tl_id"
+        :value="list.tl_id"
+      >
+        {{ list.tl_name }}
+      </option>
+
+    </select>
+
+    <button
+      class="btn btn-primary"
+      data-bs-toggle="modal"
+      data-bs-target="#createTaskModal"
+    >
+      <i class="fas fa-plus me-2"></i>
+      New Task
+    </button>
+
+  </div>
+
+</div>
 
       <hr>
 
@@ -303,9 +339,9 @@ onUnmounted(() => {
         <tbody>
 
           <tr
-            v-for="task in taskStore.tasks"
-            :key="task.task_id"
-          >
+    v-for="task in filteredTasks"
+    :key="task.task_id"
+>
 
             <td>
               {{ task.task_id }}
