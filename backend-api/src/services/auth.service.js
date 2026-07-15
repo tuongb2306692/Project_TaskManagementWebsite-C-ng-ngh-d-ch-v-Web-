@@ -7,9 +7,7 @@ const SALT_ROUNDS = 10;
 
 async function register(payload) {
     const existingUser = await knex('users')
-        .where({
-            user_username: payload.username,
-        })
+        .where({ user_username: payload.username })
         .first();
 
     if (existingUser) {
@@ -37,9 +35,7 @@ async function register(payload) {
 
 async function login(payload) {
     const user = await knex('users')
-        .where({
-            user_username: payload.username,
-        })
+        .where({ user_username: payload.username })
         .first();
 
     if (!user) {
