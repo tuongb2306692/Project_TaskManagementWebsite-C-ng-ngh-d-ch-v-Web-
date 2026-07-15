@@ -1,89 +1,74 @@
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHistory } from 'vue-router';
 
-import LoginView from "@/views/LoginView.vue";
-import RegisterView from "@/views/RegisterView.vue";
-import DashboardView from "@/views/DashboardView.vue";
-import AppLayout from "@/layouts/AppLayout.vue";
+import LoginView from '@/views/LoginView.vue';
+import RegisterView from '@/views/RegisterView.vue';
+import DashboardView from '@/views/DashboardView.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+import NotFoundView from '@/views/NotFoundView.vue';
 
 const routes = [
-  {
-    path: "/",
-    redirect: "/login",
-  },
-
-  {
-    path: "/login",
-    name: "login",
-    component: LoginView,
-    meta: {
-      guest: true,
+    {
+        path: '/login',
+        name: 'login',
+        component: LoginView,
+        meta: { guest: true },
     },
-  },
-
-  {
-    path: "/register",
-    name: "register",
-    component: RegisterView,
-    meta: {
-      guest: true,
+    {
+        path: '/register',
+        name: 'register',
+        component: RegisterView,
+        meta: { guest: true },
     },
-  },
-
-  {
-    path: "/",
-    component: AppLayout,
-    meta: {
-      requiresAuth: true,
+    {
+        path: '/',
+        component: AppLayout,
+        meta: { requiresAuth: true },
+        children: [
+            {
+                path: '',
+                redirect: '/dashboard',
+            },
+            {
+                path: 'dashboard',
+                name: 'dashboard',
+                component: DashboardView,
+            },
+            {
+                path: 'lists',
+                name: 'lists',
+                component: () => import('@/views/TaskListsView.vue'),
+            },
+            {
+                path: 'tasks',
+                name: 'tasks',
+                component: () => import('@/views/TasksView.vue'),
+            },
+        ],
     },
-    children: [
-      {
-        path: "dashboard",
-        name: "dashboard",
-        component: DashboardView,
-      },
-
-      {
-        path: "lists",
-        name: "lists",
-        component: () => import("@/views/TaskListsView.vue"),
-      },
-
-      {
-        path: "tasks",
-        name: "tasks",
-        component: () => import("@/views/TasksView.vue"),
-      },
-      {
-        path: "profile",
-        name: "profile",
-        component: () => import("@/views/ProfileView.vue"),
-      },
-    ],
-  },
-
-  {
-    path: "/:pathMatch(.*)*",
-    redirect: "/login",
-  },
+    {
+        path: '/:pathMatch(.*)*',
+        name: 'not-found',
+        component: NotFoundView,
+    },
 ];
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes,
+    history: createWebHistory(import.meta.env.BASE_URL),
+    routes,
 });
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem('accessToken');
 
-  if (to.meta.requiresAuth && !token) {
-    return next("/login");
-  }
+    if (to.meta.requiresAuth && !token) {
+        return next('/login');
+    }
 
-  if (to.meta.guest && token) {
-    return next("/dashboard");
-  }
+    if (to.meta.guest && token) {
+        return next('/dashboard');
+    }
 
-  next();
+    return next();
 });
 
 export default router;

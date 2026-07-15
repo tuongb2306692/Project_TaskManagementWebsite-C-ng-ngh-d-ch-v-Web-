@@ -1,754 +1,345 @@
 <script setup>
+import { computed, ref } from 'vue';
 import {
-  ref,
-  computed,
-  onMounted,
-  onUnmounted,
-} from "vue";
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from '@tanstack/vue-query';
 
-import * as bootstrap from "bootstrap";
+import ListService from '@/services/list.service';
+import TaskService from '@/services/task.service';
 
-import ListService from "@/services/list.service";
-import { useTaskStore } from "@/stores/task.store";
+const queryClient = useQueryClient();
 
-const taskStore = useTaskStore();
-
-let polling = null;
-
-const taskLists = ref([]);
-const selectedTaskList = ref("");
-
-const newTask = ref({
-  tl_id: "",
-  task_title: "",
-  task_description: "",
-  task_priority: "Medium",
-  task_status: "Todo",
-  task_due_date: "",
+const filters = ref({
+    status: '',
+    priority: '',
+    tl_id: '',
+    overdue: '',
 });
 
-const editTask = ref({
-  task_id: null,
-  tl_id: "",
-  task_title: "",
-  task_description: "",
-  task_priority: "",
-  task_status: "",
-  task_due_date: "",
+const form = ref({
+    tl_id: '',
+    task_title: '',
+    task_description: '',
+    task_priority: 'Medium',
+    task_status: 'Todo',
+    task_due_date: '',
 });
 
-const creating = ref(false);
-const editing = ref(false);
+const editingId = ref(null);
+const errorMessage = ref('');
 
-let createTaskModal = null;
-let editTaskModal = null;
+const taskQueryParams = computed(() => ({
+    status: filters.value.status || undefined,
+    priority: filters.value.priority || undefined,
+    tl_id: filters.value.tl_id || undefined,
+    overdue: filters.value.overdue || undefined,
+}));
 
-const formatDate = (date) => {
-  if (!date) {
-    return "";
-  }
-
-  return new Date(date).toLocaleDateString("en-GB");
-};
-
-const getTaskListName = (tl_id) => {
-  const list = taskLists.value.find(
-    (item) => item.tl_id === tl_id
-  );
-
-  return list ? list.tl_name : "";
-};
-
-const filteredTasks = computed(() => {
-  if (!selectedTaskList.value) {
-    return taskStore.tasks;
-  }
-
-  return taskStore.tasks.filter(
-    (task) =>
-      task.tl_id == selectedTaskList.value
-  );
+const listsQuery = useQuery({
+    queryKey: ['task-lists'],
+    queryFn: () => ListService.getAll(),
 });
 
-const loadTaskLists = async () => {
-  try {
-    const response = await ListService.getAll();
+const tasksQuery = useQuery({
+    queryKey: ['tasks', taskQueryParams],
+    queryFn: () => TaskService.getAll(taskQueryParams.value),
+    refetchInterval: 5000,
+});
 
-    taskLists.value = response.data;
-  } catch (error) {
-    console.error(error);
-  }
-};
+const saveMutation = useMutation({
+    mutationFn: () => {
+        if (editingId.value) {
+            return TaskService.update(editingId.value, form.value);
+        }
 
-const createTask = async () => {
-  if (!newTask.value.tl_id) {
-    alert("Please select a task list.");
-    return;
-  }
+        return TaskService.create(form.value);
+    },
+    onSuccess: () => {
+        resetForm();
 
-  if (!newTask.value.task_title.trim()) {
-    alert("Please enter task title.");
-    return;
-  }
+        queryClient.invalidateQueries({
+            queryKey: ['tasks'],
+        });
+    },
+    onError: (error) => {
+        errorMessage.value =
+            error.response?.data?.message || 'Cannot save task.';
+    },
+});
 
-  creating.value = true;
+const deleteMutation = useMutation({
+    mutationFn: (id) => TaskService.delete(id),
+    onSuccess: () => {
+        queryClient.invalidateQueries({
+            queryKey: ['tasks'],
+        });
+    },
+});
 
-  try {
-    await taskStore.createTask(newTask.value);
+function resetForm() {
+    editingId.value = null;
+    errorMessage.value = '';
 
-    createTaskModal.hide();
-
-    document.body.classList.remove("modal-open");
-
-    document
-      .querySelectorAll(".modal-backdrop")
-      .forEach((el) => el.remove());
-
-    newTask.value = {
-      tl_id: "",
-      task_title: "",
-      task_description: "",
-      task_priority: "Medium",
-      task_status: "Todo",
-      task_due_date: "",
+    form.value = {
+        tl_id: '',
+        task_title: '',
+        task_description: '',
+        task_priority: 'Medium',
+        task_status: 'Todo',
+        task_due_date: '',
     };
-  } catch (error) {
-    alert(
-      error.response?.data?.message ||
-      "Cannot create task."
-    );
-  } finally {
-    creating.value = false;
-  }
-};
+}
 
-const openEditModal = (task) => {
-  editTask.value = {
-    task_id: task.task_id,
-    tl_id: task.tl_id,
-    task_title: task.task_title,
-    task_description: task.task_description,
-    task_priority: task.task_priority,
-    task_status: task.task_status,
-    task_due_date: task.task_due_date
-      ? task.task_due_date.substring(0, 10)
-      : "",
-  };
+function submitForm() {
+    errorMessage.value = '';
 
-  editTaskModal.show();
-};
-
-const updateTask = async () => {
-  if (!editTask.value.task_title.trim()) {
-    alert("Please enter task title.");
-    return;
-  }
-
-  editing.value = true;
-
-  try {
-    await taskStore.updateTask(
-      editTask.value.task_id,
-      {
-        tl_id: editTask.value.tl_id,
-        task_title: editTask.value.task_title,
-        task_description:
-          editTask.value.task_description,
-        task_priority:
-          editTask.value.task_priority,
-        task_status:
-          editTask.value.task_status,
-        task_due_date:
-          editTask.value.task_due_date,
-      }
-    );
-
-    editTaskModal.hide();
-
-    document.body.classList.remove("modal-open");
-
-    document
-      .querySelectorAll(".modal-backdrop")
-      .forEach((el) => el.remove());
-  } catch (error) {
-    alert(
-      error.response?.data?.message ||
-      "Cannot update task."
-    );
-  } finally {
-    editing.value = false;
-  }
-};
-
-const deleteTask = async (id) => {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this task?"
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    await taskStore.deleteTask(id);
-  } catch (error) {
-    alert(
-      error.response?.data?.message ||
-      "Cannot delete task."
-    );
-  }
-};
-
-onMounted(async () => {
-  await taskStore.loadTasks();
-
-  await loadTaskLists();
-
-  createTaskModal = new bootstrap.Modal(
-    document.getElementById("createTaskModal")
-  );
-
-  editTaskModal = new bootstrap.Modal(
-    document.getElementById("editTaskModal")
-  );
-
-  polling = setInterval(async () => {
-    if (!document.hidden) {
-      await taskStore.loadTasks();
+    if (!form.value.tl_id) {
+        errorMessage.value = 'Please select a task list.';
+        return;
     }
-  }, 5000);
-});
 
-onUnmounted(() => {
-  if (polling) {
-    clearInterval(polling);
-  }
-});
+    if (!form.value.task_title.trim()) {
+        errorMessage.value = 'Task title is required.';
+        return;
+    }
+
+    saveMutation.mutate();
+}
+
+function editTask(task) {
+    editingId.value = task.task_id;
+
+    form.value = {
+        tl_id: task.tl_id,
+        task_title: task.task_title,
+        task_description: task.task_description || '',
+        task_priority: task.task_priority,
+        task_status: task.task_status,
+        task_due_date: task.task_due_date
+            ? task.task_due_date.substring(0, 10)
+            : '',
+    };
+}
+
+function deleteTask(id) {
+    if (confirm('Delete this task?')) {
+        deleteMutation.mutate(id);
+    }
+}
+
+function listName(id) {
+    const list = (listsQuery.data.value || []).find(
+        (item) => item.tl_id === id
+    );
+
+    return list?.tl_name || '';
+}
 </script>
 
 <template>
-  <div class="card shadow">
+    <div class="card shadow">
+        <div class="card-body">
+            <h2>Tasks</h2>
 
-    <div class="card-body">
+            <hr />
 
-      <div class="d-flex justify-content-between align-items-center mb-3">
-
-  <h2>Tasks</h2>
-
-  <div class="d-flex align-items-center">
-
-    <select
-      v-model="selectedTaskList"
-      class="form-select me-3"
-      style="width:220px"
-    >
-      <option value="">
-        All Task Lists
-      </option>
-
-      <option
-        v-for="list in taskLists"
-        :key="list.tl_id"
-        :value="list.tl_id"
-      >
-        {{ list.tl_name }}
-      </option>
-
-    </select>
-
-    <button
-      class="btn btn-primary"
-      data-bs-toggle="modal"
-      data-bs-target="#createTaskModal"
-    >
-      <i class="fas fa-plus me-2"></i>
-      New Task
-    </button>
-
-  </div>
-
-</div>
-
-      <hr>
-
-      <div
-        v-if="taskStore.loading"
-        class="text-center"
-      >
-        Loading...
-      </div>
-
-      <div
-        v-else-if="taskStore.errorMessage"
-        class="alert alert-danger"
-      >
-        {{ taskStore.errorMessage }}
-      </div>
-
-      <div
-        v-else-if="taskStore.tasks.length === 0"
-        class="text-muted"
-      >
-        No tasks found.
-      </div>
-
-      <table
-        v-else
-        class="table table-hover align-middle"
-      >
-
-        <thead>
-
-          <tr>
-
-            <th width="70">
-              ID
-            </th>
-
-            <th>
-              Title
-            </th>
-
-            <th>
-              Status
-            </th>
-
-            <th>
-              Priority
-            </th>
-
-            <th>
-              Due Date
-            </th>
-
-            <th>
-              Task List
-            </th>
-
-            <th
-              width="180"
-              class="text-center"
+            <div
+                v-if="errorMessage"
+                class="alert alert-danger"
             >
-              Actions
-            </th>
+                {{ errorMessage }}
+            </div>
 
-          </tr>
+            <form
+                class="row g-2 mb-4"
+                @submit.prevent="submitForm"
+            >
+                <div class="col-md-3">
+                    <select
+                        v-model="form.tl_id"
+                        class="form-select"
+                    >
+                        <option value="">Select list</option>
 
-        </thead>
+                        <option
+                            v-for="list in listsQuery.data.value || []"
+                            :key="list.tl_id"
+                            :value="list.tl_id"
+                        >
+                            {{ list.tl_name }}
+                        </option>
+                    </select>
+                </div>
 
-        <tbody>
+                <div class="col-md-3">
+                    <input
+                        v-model="form.task_title"
+                        class="form-control"
+                        placeholder="Task title"
+                    />
+                </div>
 
-          <tr
-    v-for="task in filteredTasks"
-    :key="task.task_id"
->
+                <div class="col-md-2">
+                    <select
+                        v-model="form.task_priority"
+                        class="form-select"
+                    >
+                        <option>Low</option>
+                        <option>Medium</option>
+                        <option>High</option>
+                    </select>
+                </div>
 
-            <td>
-              {{ task.task_id }}
-            </td>
+                <div class="col-md-2">
+                    <select
+                        v-model="form.task_status"
+                        class="form-select"
+                    >
+                        <option>Todo</option>
+                        <option>Doing</option>
+                        <option>Done</option>
+                    </select>
+                </div>
 
-            <td>
-              {{ task.task_title }}
-            </td>
+                <div class="col-md-2">
+                    <input
+                        v-model="form.task_due_date"
+                        type="date"
+                        class="form-control"
+                    />
+                </div>
 
-            <td>
-              {{ task.task_status }}
-            </td>
+                <div class="col-12">
+                    <textarea
+                        v-model="form.task_description"
+                        class="form-control"
+                        rows="2"
+                        placeholder="Description"
+                    ></textarea>
+                </div>
 
-            <td>
-              {{ task.task_priority }}
-            </td>
+                <div class="col-12">
+                    <button class="btn btn-primary me-2">
+                        {{ editingId ? 'Update Task' : 'Create Task' }}
+                    </button>
 
-            <td>
-              {{ formatDate(task.task_due_date) }}
-            </td>
+                    <button
+                        v-if="editingId"
+                        type="button"
+                        class="btn btn-secondary"
+                        @click="resetForm"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </form>
 
-            <td>
-              {{ getTaskListName(task.tl_id) }}
-            </td>
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <select
+                        v-model="filters.status"
+                        class="form-select"
+                    >
+                        <option value="">All status</option>
+                        <option>Todo</option>
+                        <option>Doing</option>
+                        <option>Done</option>
+                    </select>
+                </div>
 
-            <td class="text-center">
+                <div class="col-md-3">
+                    <select
+                        v-model="filters.priority"
+                        class="form-select"
+                    >
+                        <option value="">All priority</option>
+                        <option>Low</option>
+                        <option>Medium</option>
+                        <option>High</option>
+                    </select>
+                </div>
 
-              <button
-                class="btn btn-warning btn-sm me-2"
-                @click="openEditModal(task)"
-              >
-                <i class="fas fa-edit"></i>
-                Edit
-              </button>
+                <div class="col-md-3">
+                    <select
+                        v-model="filters.tl_id"
+                        class="form-select"
+                    >
+                        <option value="">All lists</option>
 
-              <button
-                class="btn btn-danger btn-sm"
-                @click="deleteTask(task.task_id)"
-              >
-                <i class="fas fa-trash"></i>
-                Delete
-              </button>
+                        <option
+                            v-for="list in listsQuery.data.value || []"
+                            :key="list.tl_id"
+                            :value="list.tl_id"
+                        >
+                            {{ list.tl_name }}
+                        </option>
+                    </select>
+                </div>
 
-            </td>
+                <div class="col-md-3">
+                    <select
+                        v-model="filters.overdue"
+                        class="form-select"
+                    >
+                        <option value="">All due dates</option>
+                        <option value="true">Overdue</option>
+                        <option value="false">Not overdue filter</option>
+                    </select>
+                </div>
+            </div>
 
-          </tr>
+            <div v-if="tasksQuery.isLoading.value">
+                Loading...
+            </div>
 
-        </tbody>
+            <table
+                v-else
+                class="table table-hover align-middle"
+            >
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>List</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Due date</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
 
-      </table>
+                <tbody>
+                    <tr
+                        v-for="task in tasksQuery.data.value || []"
+                        :key="task.task_id"
+                    >
+                        <td>{{ task.task_id }}</td>
+                        <td>{{ task.task_title }}</td>
+                        <td>{{ listName(task.tl_id) }}</td>
+                        <td>{{ task.task_status }}</td>
+                        <td>{{ task.task_priority }}</td>
+                        <td>{{ task.task_due_date }}</td>
 
+                        <td class="text-end">
+                            <button
+                                class="btn btn-warning btn-sm me-2"
+                                @click="editTask(task)"
+                            >
+                                Edit
+                            </button>
+
+                            <button
+                                class="btn btn-danger btn-sm"
+                                @click="deleteTask(task.task_id)"
+                            >
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-
-  </div>
-    <!-- Create Modal -->
-
-  <div
-    class="modal fade"
-    id="createTaskModal"
-    tabindex="-1"
-    aria-hidden="true"
-  >
-
-    <div class="modal-dialog">
-
-      <div class="modal-content">
-
-        <div class="modal-header">
-
-          <h5 class="modal-title">
-            Create Task
-          </h5>
-
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-          ></button>
-
-        </div>
-
-        <div class="modal-body">
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Task List
-            </label>
-
-            <select
-              class="form-select"
-              v-model="newTask.tl_id"
-            >
-
-              <option value="">
-                Select Task List
-              </option>
-
-              <option
-                v-for="list in taskLists"
-                :key="list.tl_id"
-                :value="list.tl_id"
-              >
-                {{ list.tl_name }}
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Title
-            </label>
-
-            <input
-              type="text"
-              class="form-control"
-              v-model="newTask.task_title"
-            />
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Description
-            </label>
-
-            <textarea
-              rows="3"
-              class="form-control"
-              v-model="newTask.task_description"
-            ></textarea>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Priority
-            </label>
-
-            <select
-              class="form-select"
-              v-model="newTask.task_priority"
-            >
-
-              <option value="High">
-                High
-              </option>
-
-              <option value="Medium">
-                Medium
-              </option>
-
-              <option value="Low">
-                Low
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Status
-            </label>
-
-            <select
-              class="form-select"
-              v-model="newTask.task_status"
-            >
-
-              <option value="Todo">
-                Todo
-              </option>
-
-              <option value="Doing">
-                Doing
-              </option>
-
-              <option value="Done">
-                Done
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Due Date
-            </label>
-
-            <input
-              type="date"
-              class="form-control"
-              v-model="newTask.task_due_date"
-            />
-
-          </div>
-
-        </div>
-
-        <div class="modal-footer">
-
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
-            Cancel
-          </button>
-
-          <button
-            class="btn btn-primary"
-            @click="createTask"
-            :disabled="creating"
-          >
-            {{ creating ? "Creating..." : "Create" }}
-          </button>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-    <!-- Edit Modal -->
-
-  <div
-    class="modal fade"
-    id="editTaskModal"
-    tabindex="-1"
-    aria-hidden="true"
-  >
-
-    <div class="modal-dialog">
-
-      <div class="modal-content">
-
-        <div class="modal-header">
-
-          <h5 class="modal-title">
-            Edit Task
-          </h5>
-
-          <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="modal"
-          ></button>
-
-        </div>
-
-        <div class="modal-body">
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Task List
-            </label>
-
-            <select
-              class="form-select"
-              v-model="editTask.tl_id"
-            >
-
-              <option
-                v-for="list in taskLists"
-                :key="list.tl_id"
-                :value="list.tl_id"
-              >
-                {{ list.tl_name }}
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Title
-            </label>
-
-            <input
-              type="text"
-              class="form-control"
-              v-model="editTask.task_title"
-            />
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Description
-            </label>
-
-            <textarea
-              rows="3"
-              class="form-control"
-              v-model="editTask.task_description"
-            ></textarea>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Priority
-            </label>
-
-            <select
-              class="form-select"
-              v-model="editTask.task_priority"
-            >
-
-              <option value="High">
-                High
-              </option>
-
-              <option value="Medium">
-                Medium
-              </option>
-
-              <option value="Low">
-                Low
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Status
-            </label>
-
-            <select
-              class="form-select"
-              v-model="editTask.task_status"
-            >
-
-              <option value="Todo">
-                Todo
-              </option>
-
-              <option value="Doing">
-                Doing
-              </option>
-
-              <option value="Done">
-                Done
-              </option>
-
-            </select>
-
-          </div>
-
-          <div class="mb-3">
-
-            <label class="form-label">
-              Due Date
-            </label>
-
-            <input
-              type="date"
-              class="form-control"
-              v-model="editTask.task_due_date"
-            />
-
-          </div>
-
-        </div>
-
-        <div class="modal-footer">
-
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
-            Cancel
-          </button>
-
-          <button
-            class="btn btn-warning"
-            @click="updateTask"
-            :disabled="editing"
-          >
-            {{ editing ? "Updating..." : "Update" }}
-          </button>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
 </template>
