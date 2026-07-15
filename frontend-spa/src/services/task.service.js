@@ -1,5 +1,19 @@
 import api from './api.service';
 
+function cleanTaskPayload(data) {
+    return {
+        ...data,
+        task_description:
+            data.task_description === ''
+                ? null
+                : data.task_description,
+        task_due_date:
+            data.task_due_date === ''
+                ? null
+                : data.task_due_date,
+    };
+}
+
 class TaskService {
     async getAll(params = {}) {
         const response = await api.get('/tasks', { params });
@@ -7,7 +21,11 @@ class TaskService {
     }
 
     async create(data) {
-        const response = await api.post('/tasks', data);
+        const response = await api.post(
+            '/tasks',
+            cleanTaskPayload(data)
+        );
+
         return response.data.data;
     }
 
@@ -17,7 +35,11 @@ class TaskService {
     }
 
     async update(id, data) {
-        const response = await api.patch(`/tasks/${id}`, data);
+        const response = await api.patch(
+            `/tasks/${id}`,
+            cleanTaskPayload(data)
+        );
+
         return response.data.data;
     }
 

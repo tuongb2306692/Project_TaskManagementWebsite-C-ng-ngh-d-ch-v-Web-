@@ -1,18 +1,17 @@
 const knex = require('../database/knex');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const ApiError = require('../api-error');
 
 const SALT_ROUNDS = 10;
 
 async function register(payload) {
     const existingUser = await knex('users')
-        .where({
-            user_username: payload.username,
-        })
+        .where({ user_username: payload.username })
         .first();
 
     if (existingUser) {
-        throw new Error('Username already exists');
+        throw new ApiError(400, 'Username already exists');
     }
 
     const passwordHash = await bcrypt.hash(
@@ -36,13 +35,11 @@ async function register(payload) {
 
 async function login(payload) {
     const user = await knex('users')
-        .where({
-            user_username: payload.username,
-        })
+        .where({ user_username: payload.username })
         .first();
 
     if (!user) {
-        throw new Error('Invalid username or password');
+        throw new ApiError(401, 'Invalid username or password');
     }
 
     const isMatched = await bcrypt.compare(
@@ -51,7 +48,7 @@ async function login(payload) {
     );
 
     if (!isMatched) {
-        throw new Error('Invalid username or password');
+        throw new ApiError(401, 'Invalid username or password');
     }
 
     const token = jwt.sign(
@@ -73,7 +70,6 @@ async function login(payload) {
         },
     };
 }
-
 
 module.exports = {
     register,
