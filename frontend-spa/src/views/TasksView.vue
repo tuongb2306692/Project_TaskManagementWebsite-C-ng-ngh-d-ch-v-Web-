@@ -11,6 +11,10 @@ import TaskService from '@/services/task.service';
 
 const queryClient = useQueryClient();
 
+const showForm = ref(false);
+const editingId = ref(null);
+const errorMessage = ref('');
+
 const filters = ref({
     status: '',
     priority: '',
@@ -27,9 +31,6 @@ const form = ref({
     task_due_date: '',
 });
 
-const editingId = ref(null);
-const errorMessage = ref('');
-
 const taskQueryParams = computed(() => ({
     status: filters.value.status || undefined,
     priority: filters.value.priority || undefined,
@@ -43,10 +44,12 @@ const listsQuery = useQuery({
 });
 
 const tasksQuery = useQuery({
-    queryKey: ['tasks', taskQueryParams],
+    queryKey: computed(() => ['tasks', taskQueryParams.value]),
     queryFn: () => TaskService.getAll(taskQueryParams.value),
-    refetchInterval: 5000,
 });
+
+const taskLists = computed(() => listsQuery.data.value || []);
+const tasks = computed(() => tasksQuery.data.value || []);
 
 const saveMutation = useMutation({
     mutationFn: () => {
@@ -78,7 +81,13 @@ const deleteMutation = useMutation({
     },
 });
 
+function openCreateForm() {
+    resetForm();
+    showForm.value = true;
+}
+
 function resetForm() {
+    showForm.value = false;
     editingId.value = null;
     errorMessage.value = '';
 
@@ -110,6 +119,7 @@ function submitForm() {
 
 function editTask(task) {
     editingId.value = task.task_id;
+    showForm.value = true;
 
     form.value = {
         tl_id: task.tl_id,
@@ -130,18 +140,25 @@ function deleteTask(id) {
 }
 
 function listName(id) {
-    const list = (listsQuery.data.value || []).find(
-        (item) => item.tl_id === id
-    );
-
-    return list?.tl_name || '';
+    const list = taskLists.value.find((item) => item.tl_id === id);
+    return list?.tl_name || '-';
 }
 </script>
 
 <template>
     <div class="card shadow">
         <div class="card-body">
-            <h2>Tasks</h2>
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">Tasks</h2>
+
+                <button
+                    class="btn btn-primary"
+                    @click="openCreateForm"
+                >
+                    <i class="fas fa-plus me-1"></i>
+                    Add Task
+                </button>
+            </div>
 
             <hr />
 
@@ -153,80 +170,92 @@ function listName(id) {
             </div>
 
             <form
-                class="row g-2 mb-4"
+                v-if="showForm"
+                class="border rounded p-3 mb-4 bg-light"
                 @submit.prevent="submitForm"
             >
-                <div class="col-md-3">
-                    <select
-                        v-model="form.tl_id"
-                        class="form-select"
-                    >
-                        <option value="">Select list</option>
+                <h5>
+                    {{ editingId ? 'Edit Task' : 'Create Task' }}
+                </h5>
 
-                        <option
-                            v-for="list in listsQuery.data.value || []"
-                            :key="list.tl_id"
-                            :value="list.tl_id"
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Task List</label>
+                        <select
+                            v-model="form.tl_id"
+                            class="form-select"
                         >
-                            {{ list.tl_name }}
-                        </option>
-                    </select>
+                            <option value="">Select list</option>
+
+                            <option
+                                v-for="list in taskLists"
+                                :key="list.tl_id"
+                                :value="list.tl_id"
+                            >
+                                {{ list.tl_name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label class="form-label">Title</label>
+                        <input
+                            v-model="form.task_title"
+                            class="form-control"
+                            placeholder="Task title"
+                        />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Priority</label>
+                        <select
+                            v-model="form.task_priority"
+                            class="form-select"
+                        >
+                            <option>Low</option>
+                            <option>Medium</option>
+                            <option>High</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <select
+                            v-model="form.task_status"
+                            class="form-select"
+                        >
+                            <option>Todo</option>
+                            <option>Doing</option>
+                            <option>Done</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Due date</label>
+                        <input
+                            v-model="form.task_due_date"
+                            type="date"
+                            class="form-control"
+                        />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">Description</label>
+                        <textarea
+                            v-model="form.task_description"
+                            class="form-control"
+                            rows="2"
+                            placeholder="Description"
+                        ></textarea>
+                    </div>
                 </div>
 
-                <div class="col-md-3">
-                    <input
-                        v-model="form.task_title"
-                        class="form-control"
-                        placeholder="Task title"
-                    />
-                </div>
-
-                <div class="col-md-2">
-                    <select
-                        v-model="form.task_priority"
-                        class="form-select"
-                    >
-                        <option>Low</option>
-                        <option>Medium</option>
-                        <option>High</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2">
-                    <select
-                        v-model="form.task_status"
-                        class="form-select"
-                    >
-                        <option>Todo</option>
-                        <option>Doing</option>
-                        <option>Done</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2">
-                    <input
-                        v-model="form.task_due_date"
-                        type="date"
-                        class="form-control"
-                    />
-                </div>
-
-                <div class="col-12">
-                    <textarea
-                        v-model="form.task_description"
-                        class="form-control"
-                        rows="2"
-                        placeholder="Description"
-                    ></textarea>
-                </div>
-
-                <div class="col-12">
+                <div class="mt-3">
                     <button class="btn btn-primary me-2">
-                        {{ editingId ? 'Update Task' : 'Create Task' }}
+                        {{ editingId ? 'Update' : 'Create' }}
                     </button>
 
                     <button
-                        v-if="editingId"
                         type="button"
                         class="btn btn-secondary"
                         @click="resetForm"
@@ -269,7 +298,7 @@ function listName(id) {
                         <option value="">All lists</option>
 
                         <option
-                            v-for="list in listsQuery.data.value || []"
+                            v-for="list in taskLists"
                             :key="list.tl_id"
                             :value="list.tl_id"
                         >
@@ -285,12 +314,14 @@ function listName(id) {
                     >
                         <option value="">All due dates</option>
                         <option value="true">Overdue</option>
-                        <option value="false">Not overdue filter</option>
                     </select>
                 </div>
             </div>
 
-            <div v-if="tasksQuery.isLoading.value">
+            <div
+                v-if="tasksQuery.isLoading.value"
+                class="text-center py-4"
+            >
                 Loading...
             </div>
 
@@ -300,7 +331,7 @@ function listName(id) {
             >
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th style="width: 80px;">ID</th>
                         <th>Title</th>
                         <th>List</th>
                         <th>Status</th>
@@ -312,7 +343,7 @@ function listName(id) {
 
                 <tbody>
                     <tr
-                        v-for="task in tasksQuery.data.value || []"
+                        v-for="task in tasks"
                         :key="task.task_id"
                     >
                         <td>{{ task.task_id }}</td>
@@ -320,7 +351,7 @@ function listName(id) {
                         <td>{{ listName(task.tl_id) }}</td>
                         <td>{{ task.task_status }}</td>
                         <td>{{ task.task_priority }}</td>
-                        <td>{{ task.task_due_date }}</td>
+                        <td>{{ task.task_due_date || '-' }}</td>
 
                         <td class="text-end">
                             <button
@@ -336,6 +367,15 @@ function listName(id) {
                             >
                                 Delete
                             </button>
+                        </td>
+                    </tr>
+
+                    <tr v-if="tasks.length === 0">
+                        <td
+                            colspan="7"
+                            class="text-center text-muted py-4"
+                        >
+                            No tasks found.
                         </td>
                     </tr>
                 </tbody>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
     useMutation,
     useQuery,
@@ -10,19 +10,21 @@ import ListService from '@/services/list.service';
 
 const queryClient = useQueryClient();
 
+const showForm = ref(false);
+const editingId = ref(null);
+const errorMessage = ref('');
+
 const form = ref({
     tl_name: '',
     tl_description: '',
 });
 
-const editingId = ref(null);
-const errorMessage = ref('');
-
 const listsQuery = useQuery({
     queryKey: ['task-lists'],
     queryFn: () => ListService.getAll(),
-    refetchInterval: 5000,
 });
+
+const taskLists = computed(() => listsQuery.data.value || []);
 
 const saveMutation = useMutation({
     mutationFn: () => {
@@ -33,13 +35,7 @@ const saveMutation = useMutation({
         return ListService.create(form.value);
     },
     onSuccess: () => {
-        form.value = {
-            tl_name: '',
-            tl_description: '',
-        };
-
-        editingId.value = null;
-        errorMessage.value = '';
+        resetForm();
 
         queryClient.invalidateQueries({
             queryKey: ['task-lists'],
@@ -60,6 +56,32 @@ const deleteMutation = useMutation({
     },
 });
 
+function openCreateForm() {
+    resetForm();
+    showForm.value = true;
+}
+
+function editList(list) {
+    editingId.value = list.tl_id;
+    showForm.value = true;
+
+    form.value = {
+        tl_name: list.tl_name,
+        tl_description: list.tl_description || '',
+    };
+}
+
+function resetForm() {
+    editingId.value = null;
+    showForm.value = false;
+    errorMessage.value = '';
+
+    form.value = {
+        tl_name: '',
+        tl_description: '',
+    };
+}
+
 function submitForm() {
     errorMessage.value = '';
 
@@ -69,24 +91,6 @@ function submitForm() {
     }
 
     saveMutation.mutate();
-}
-
-function editList(list) {
-    editingId.value = list.tl_id;
-
-    form.value = {
-        tl_name: list.tl_name,
-        tl_description: list.tl_description || '',
-    };
-}
-
-function cancelEdit() {
-    editingId.value = null;
-
-    form.value = {
-        tl_name: '',
-        tl_description: '',
-    };
 }
 
 function deleteList(id) {
@@ -99,7 +103,17 @@ function deleteList(id) {
 <template>
     <div class="card shadow">
         <div class="card-body">
-            <h2>Task Lists</h2>
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">Task Lists</h2>
+
+                <button
+                    class="btn btn-primary"
+                    @click="openCreateForm"
+                >
+                    <i class="fas fa-plus me-1"></i>
+                    Add Task List
+                </button>
+            </div>
 
             <hr />
 
@@ -111,42 +125,53 @@ function deleteList(id) {
             </div>
 
             <form
-                class="row g-2 mb-4"
+                v-if="showForm"
+                class="border rounded p-3 mb-4 bg-light"
                 @submit.prevent="submitForm"
             >
-                <div class="col-md-4">
-                    <input
-                        v-model="form.tl_name"
-                        class="form-control"
-                        placeholder="Task list name"
-                    />
+                <h5>
+                    {{ editingId ? 'Edit Task List' : 'Create Task List' }}
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">Name</label>
+                        <input
+                            v-model="form.tl_name"
+                            class="form-control"
+                            placeholder="Task list name"
+                        />
+                    </div>
+
+                    <div class="col-md-7">
+                        <label class="form-label">Description</label>
+                        <input
+                            v-model="form.tl_description"
+                            class="form-control"
+                            placeholder="Description"
+                        />
+                    </div>
                 </div>
 
-                <div class="col-md-5">
-                    <input
-                        v-model="form.tl_description"
-                        class="form-control"
-                        placeholder="Description"
-                    />
-                </div>
-
-                <div class="col-md-3">
+                <div class="mt-3">
                     <button class="btn btn-primary me-2">
                         {{ editingId ? 'Update' : 'Create' }}
                     </button>
 
                     <button
-                        v-if="editingId"
                         type="button"
                         class="btn btn-secondary"
-                        @click="cancelEdit"
+                        @click="resetForm"
                     >
                         Cancel
                     </button>
                 </div>
             </form>
 
-            <div v-if="listsQuery.isLoading.value">
+            <div
+                v-if="listsQuery.isLoading.value"
+                class="text-center py-4"
+            >
                 Loading...
             </div>
 
@@ -156,7 +181,7 @@ function deleteList(id) {
             >
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th style="width: 80px;">ID</th>
                         <th>Name</th>
                         <th>Description</th>
                         <th class="text-end">Actions</th>
@@ -165,12 +190,12 @@ function deleteList(id) {
 
                 <tbody>
                     <tr
-                        v-for="list in listsQuery.data.value || []"
+                        v-for="list in taskLists"
                         :key="list.tl_id"
                     >
                         <td>{{ list.tl_id }}</td>
                         <td>{{ list.tl_name }}</td>
-                        <td>{{ list.tl_description }}</td>
+                        <td>{{ list.tl_description || '-' }}</td>
 
                         <td class="text-end">
                             <button
@@ -186,6 +211,15 @@ function deleteList(id) {
                             >
                                 Delete
                             </button>
+                        </td>
+                    </tr>
+
+                    <tr v-if="taskLists.length === 0">
+                        <td
+                            colspan="4"
+                            class="text-center text-muted py-4"
+                        >
+                            No task lists yet.
                         </td>
                     </tr>
                 </tbody>

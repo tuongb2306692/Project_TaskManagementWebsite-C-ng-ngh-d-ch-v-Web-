@@ -11,13 +11,15 @@ const userStore = useUserStore();
 const listsQuery = useQuery({
     queryKey: ['task-lists'],
     queryFn: () => ListService.getAll(),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
 });
 
 const tasksQuery = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks-dashboard'],
     queryFn: () => TaskService.getAll(),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
 });
 
 const lists = computed(() => listsQuery.data.value || []);
@@ -51,10 +53,6 @@ const highPriorityTasks = computed(() =>
                 Welcome,
                 <strong>{{ userStore.username }}</strong>
             </h5>
-
-            <p class="mb-4">
-                This dashboard is updated automatically by polling.
-            </p>
 
             <div
                 v-if="tasksQuery.isLoading.value || listsQuery.isLoading.value"
